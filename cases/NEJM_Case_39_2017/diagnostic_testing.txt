@@ -1,0 +1,48 @@
+Table 1. Laboratory Data.* Variable
+Hemoglobin (g/dl) White‐cell count (per mm3) Sodium (mmol/liter) Chloride (mmol/liter)
+Urea nitrogen (mg/dl) Glucose (mg/dl) Cholesterol (mg/dl)
+High‐density lipoprotein Triglycerides (mg/dl)
+Reference Range, Adults†
+12.0–16.0 4500–11,000 135–145 98–108 8–25 70–110
+35–100 40–150
+On Presentation
+13.1 7540 141 105 15 98
+8 Hr after Presentation
+Troponin T (ng/dl)
+<0.03
+0.03
+0.21
+Hematocrit (%)
+36.0–46.0
+39.0
+Platelet count (per mm3)
+150,000–400,000
+316,000
+Potassium (mmol/liter)
+3.4–5.0
+3.8
+Carbon dioxide (mmol/liter)
+23–32
+19
+Creatinine (mg/dl)
+0.60–1.50
+0.91
+Magnesium (mg/dl)
+1.7–2.4
+1.6
+Total
+<200
+159
+63 52
+Low‐density lipoprotein
+<130
+86
+Glycated hemoglobin (%)
+4.3–6.4
+4.6
+
+
+Dr. Malissa J. Wood: Catheterization of the left side of the heart and coronary angiography were per-
+formed. After injection of contrast material into the left main coronary artery (see Videos 3 and 4), a filling defect was identified in the first obtuse marginal branch of the left circumflex coronary artery (Fig. 2). There was evidence of sudden, diffuse narrowing of the vessel lumen and an irregular filling pattern, with preserved but de- layed distal filling (Thrombolysis in Myocardial Infarction [TIMI] flow grade, 2 out of 3); these findings were consistent with coronary-artery dissection.
+Coronary-artery dissection can be differenti- ated from atherosclerotic plaque rupture on the basis of the following features: the vessel wall is stained with contrast material and the lesion is longer and has a characteristic appearance. Coronary-artery dissection is frequently associ- ated with the presence of excessive tortuosity of the coronary arteries. Distinct subtypes of spon- taneous coronary-artery dissection have been described. Type 1 dissection, which was seen in this patient, is associated with a characteristic staining pattern within the vessel wall that is consistent with intimal disruption. Type 2 dis- section is characterized by a diffuse, smooth pattern of luminal narrowing. Type 3 dissection, which mimics atherosclerosis, is associated with focal segments of luminal narrowing. Type 3 dis- section is uncommon, and intravascular ultra- sonography or optical coherence tomography may be performed to establish the diagnosis with certainty.11
+Spontaneous coronary-artery dissection should be a strong consideration in a young woman or man who does not have traditional cardiac risk factors and who presents with an acute coronary syndrome. The initial evaluation should include electrocardiography and measurement of the troponin level, as well as echocardiography to evaluate for a possible wall-motion abnormality. Chest pain should be treated with sublingual nitroglycerin, and if there is no improvement, coronary angiography may be performed. In clinically stable patients who are pain-free and do not have evidence of ST-segment elevation, cardiac CT angiography may be considered.
