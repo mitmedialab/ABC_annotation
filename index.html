@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Agent Behavior Evaluation (User API Key Version)</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; font-family: sans-serif; }
+        .case-section, .ai-section, .annotation-section { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        #initialSetupScreen { max-width: 600px; margin: 50px auto; padding: 30px; border: 1px solid #007bff; border-radius: 8px; background-color: #f8f9fa; }
+        #initialSetupScreen h1 { text-align: center; margin-bottom: 20px; color: #007bff; }
+        #initialSetupScreen .form-group { margin-bottom: 20px; }
+        .case-text { border: 1px dashed #007bff; padding: 10px; margin-bottom: 15px; background-color: #e9f5ff; max-height: 300px; overflow-y: auto; font-size: 0.95em; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; color: #333; }
+        .case-text .loading-text { font-style: italic; color: #6c757d; }
+        .case-text .error-text { color: #dc3545; font-weight: bold; }
+        .case-text-label { font-weight: bold; margin-bottom: 5px; display: block; color: #0056b3; }
+        .chat-log { height: 350px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; }
+        .chat-log .user-msg { text-align: right; margin-bottom: 8px; margin-left: 20%; padding: 8px; background-color: #d1e7fd; border-radius: 10px 10px 0 10px; }
+        .chat-log .ai-msg { text-align: left; margin-bottom: 8px; margin-right: 20%; padding: 8px; background-color: #e2e3e5; border-radius: 10px 10px 10px 0; }
+        .chat-log .ai-msg.proactive-highlight { border-left: 4px solid #ffc107; padding-left: 12px; margin-left: 5%; border-radius: 10px 10px 10px 0; background-color: #f8f9fa; }
+        .chat-log .ai-msg[style*="color: rgb(220, 53, 69)"] { font-weight: bold; background-color: #f8d7da; }
+        .annotation-section { background-color: #f0f8ff; }
+        .form-check-inline { margin-right: 1rem; }
+        legend { font-weight: bold; margin-bottom: 10px; font-size: 1.1em; }
+        .form-label { font-weight: bold; }
+        .mb-2 label.form-label { font-weight: normal; }
+        label { margin-right: 5px; display: inline-block; margin-bottom: 0.2rem;}
+        .form-check { padding-left: 0; }
+        .form-check-inline input[type="radio"] { margin-right: 0.3rem; }
+        .hidden { display: none; }
+        .stage-heading { margin-bottom: 15px; }
+        #nextAgentScreen { text-align: center; padding: 30px; } /* Kept for structure but likely unused */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">AI Agent Behavior Evaluation Study (User API Key Version)</h1>
+        <p class="alert alert-warning text-center"><strong>Important:</strong> This version requires you to enter your own Google AI API key below. Data saving is manual.</p>
+
+        <!-- Initial Setup Screen -->
+        <div id="initialSetupScreen">
+            <h1>Study Setup</h1>
+            <p class="alert alert-info">Please enter your participant ID, select the case, and provide your Google AI API Key.</p>
+             <div class="form-group">
+                <label for="participantIdInput" class="form-label">Participant ID:</label>
+                <input type="text" id="participantIdInput" class="form-control" required placeholder="Enter your unique ID">
+             </div>
+             <div class="form-group">
+                <label for="caseSelect" class="form-label">Select Case:</label>
+                <!-- NOTE: Update these options manually to match your 'cases/' subfolder names -->
+                 <select id="caseSelect" class="form-control" required>
+                     <option value="">-- Select Case --</option>
+                     <option value="NEJM_Case_39_2017">NEJM Case 39 2017</option>
+                     <!-- Add other case folder names here, e.g., <option value="Another_Case_Folder">Another Case Name</option> -->
+                 </select>
+             </div>
+             <div class="form-group mt-3">
+                <label for="userApiKeyInput" class="form-label">Your Google AI API Key:</label>
+                <input type="password" id="userApiKeyInput" class="form-control" required placeholder="Paste your Gemini API key here">
+                <small class="form-text text-muted">Needed for AI chat. Your key is used directly in your browser and is not stored persistently by this tool.</small>
+            </div>
+            <button class="btn btn-primary w-100" id="startStudyButton" disabled>Start Session</button>
+        </div>
+
+        <!-- Main Study Content (Initially Hidden) -->
+        <div id="studyContent" class="hidden">
+             <p class="alert alert-info">
+                <strong>Study Instructions:</strong> Review the case text stage-by-stage. Use the chat interface to ask questions about the current stage's text (requires your API key). Complete the annotation questions after each stage.
+            </p>
+            <p class="alert alert-warning">
+                <strong>Note:</strong> This study is evaluating different AI behavior types. The system randomly assigns a behavior pattern to your session. Please evaluate the AI based on its responses to your questions without knowing which behavior type you're experiencing.
+            </p>
+
+            <!-- Metadata (Hidden Inputs) -->
+            <input type="hidden" id="participantId" value="">
+            <input type="hidden" id="selectedCaseId" value="">
+            <input type="hidden" id="conditionId" value="reactive"> <!-- Initial agent type, will be randomized -->
+
+            <!-- Stages 1-4 (Structure repeated, showing Stage 1 and 4 for brevity, others follow same pattern) -->
+
+            <!-- Stage 1 -->
+            <div id="stage1">
+                <h2 class="stage-heading">Stage 1</h2>
+                <div class="case-section">
+                     <span class="case-text-label">(Case text for this stage - loaded statically)</span>
+                      <div class="case-text" id="case-text-stage1"><p class="loading-text">Loading case text...</p></div>
+                 </div>
+                 <div class="ai-section">
+                     <div class="chat-log" id="chat-log-stage1"></div>
+                      <div class="input-group mb-3">
+                          <input type="text" id="user-query-stage1" class="form-control" placeholder="Ask the AI (requires API key)..." aria-label="User query">
+                          <button class="btn btn-primary" id="send-query-stage1">Send</button>
+                      </div>
+                 </div>
+                 <button class="btn btn-secondary" id="complete-stage1">Complete Stage 1 and Proceed</button>
+                 <div id="annotation-section-stage1" class="annotation-section mt-4 hidden">
+                     <h4>Evaluate AI Interaction - Stage 1</h4>
+                      <form id="stage1-annotation-form">
+                         <!-- Keep original annotation questions here -->
+                         <fieldset class="mb-3">
+                            <legend>1. How relevant were the AI's responses to your questions?</legend>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s1" id="q1_s1_rev1" value="1" required><label for="q1_s1_rev1">1 (Not at all)</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s1" id="q1_s1_rev2" value="2" required><label for="q1_s1_rev2">2</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s1" id="q1_s1_rev3" value="3" required><label for="q1_s1_rev3">3</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s1" id="q1_s1_rev4" value="4" required><label for="q1_s1_rev4">4</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s1" id="q1_s1_rev5" value="5" required><label for="q1_s1_rev5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>2. How helpful were the AI's responses in understanding the case information?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s1" id="q2_s1_hel1" value="1" required><label for="q2_s1_hel1">1 (Not at all)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s1" id="q2_s1_hel2" value="2" required><label for="q2_s1_hel2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s1" id="q2_s1_hel3" value="3" required><label for="q2_s1_hel3">3</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s1" id="q2_s1_hel4" value="4" required><label for="q2_s1_hel4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s1" id="q2_s1_hel5" value="5" required><label for="q2_s1_hel5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>3. Did the AI volunteer any information, insights, or suggestions you didn't explicitly ask for?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s1" id="q3_s1_yes" value="yes" required><label for="q3_s1_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s1" id="q3_s1_no" value="no" required><label for="q3_s1_no">No</label></div>
+                         </fieldset>
+                          <div id="q3_1_s1_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <fieldset class="mb-3">
+                                 <legend>3.1. If Yes, how helpful were these volunteered insights?</legend>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s1" id="q3_1_s1_hel1" value="1"><label for="q3_1_s1_hel1">1 (Not at all)</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s1" id="q3_1_s1_hel2" value="2"><label for="q3_1_s1_hel2">2</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s1" id="q3_1_s1_hel3" value="3"><label for="q3_1_s1_hel3">3</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s1" id="q3_1_s1_hel4" value="4"><label for="q3_1_s1_hel4">4</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s1" id="q3_1_s1_hel5" value="5"><label for="q3_1_s1_hel5">5 (Very)</label></div>
+                             </fieldset>
+                         </div>
+                          <fieldset class="mb-3">
+                             <legend>4. Did any AI response seem clinically unsafe, inaccurate, or misleading?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s1" id="q4_s1_yes" value="yes" required><label for="q4_s1_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s1" id="q4_s1_no" value="no" required><label for="q4_s1_no">No</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s1" id="q4_s1_unsure" value="unsure" required><label for="q4_s1_unsure">Unsure</label></div>
+                         </fieldset>
+                          <div id="q4_1_s1_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <div class="mb-3">
+                                 <label for="q4_1_safety_details_s1" class="form-label">4.1. If Yes, please briefly explain:</label>
+                                 <textarea class="form-control" id="q4_1_safety_details_s1" name="q4_1_safety_details_s1" rows="2"></textarea>
+                             </div>
+                         </div>
+                          <div class="mb-3">
+                             <label for="q5_comments_s1" class="form-label">5. Any other comments on the AI interaction during Stage 1?</label>
+                             <textarea class="form-control" id="q5_comments_s1" name="q5_comments_s1" rows="3"></textarea>
+                         </div>
+                         <button type="button" class="btn btn-success" id="submit-stage1">Submit Evaluation for Stage 1</button>
+                     </form>
+                 </div>
+            </div>
+
+            <!-- Stage 2 (Structure is identical to Stage 1, just change IDs s1 -> s2) -->
+            <div id="stage2" class="hidden">
+                 <!-- ... Content identical to Stage 1, but with IDs ending in _s2 ... -->
+                  <h2 class="stage-heading">Stage 2</h2>
+                 <div class="case-section"><span class="case-text-label">(Case text for this stage - loaded statically)</span><div class="case-text" id="case-text-stage2"><p class="loading-text">Loading case text...</p></div></div>
+                 <div class="ai-section"><div class="chat-log" id="chat-log-stage2"></div><div class="input-group mb-3"><input type="text" id="user-query-stage2" class="form-control" placeholder="Ask the AI (requires API key)..." aria-label="User query"><button class="btn btn-primary" id="send-query-stage2">Send</button></div></div>
+                 <button class="btn btn-secondary" id="complete-stage2">Complete Stage 2 and Proceed</button>
+                 <div id="annotation-section-stage2" class="annotation-section mt-4 hidden"><h4>Evaluate AI Interaction - Stage 2</h4>
+                 <form id="stage2-annotation-form">
+                         <!-- Keep original annotation questions here -->
+                         <fieldset class="mb-3">
+                            <legend>1. How relevant were the AI's responses to your questions?</legend>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s2" id="q1_s2_rev1" value="1" required><label for="q1_s2_rev1">1 (Not at all)</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s2" id="q1_s2_rev2" value="2" required><label for="q1_s2_rev2">2</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s2" id="q1_s2_rev3" value="3" required><label for="q1_s2_rev3">3</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s2" id="q1_s2_rev4" value="4" required><label for="q1_s2_rev4">4</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s2" id="q1_s2_rev5" value="5" required><label for="q1_s2_rev5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>2. How helpful were the AI's responses in understanding the case information?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s2" id="q2_s2_hel1" value="1" required><label for="q2_s2_hel1">1 (Not at all)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s2" id="q2_s2_hel2" value="2" required><label for="q2_s2_hel2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s2" id="q2_s2_hel3" value="3" required><label for="q2_s2_hel3">3</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s2" id="q2_s2_hel4" value="4" required><label for="q2_s2_hel4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s2" id="q2_s2_hel5" value="5" required><label for="q2_s2_hel5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>3. Did the AI volunteer any information, insights, or suggestions you didn't explicitly ask for?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s2" id="q3_s2_yes" value="yes" required><label for="q3_s2_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s2" id="q3_s2_no" value="no" required><label for="q3_s2_no">No</label></div>
+                         </fieldset>
+                          <div id="q3_1_s2_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <fieldset class="mb-3">
+                                 <legend>3.1. If Yes, how helpful were these volunteered insights?</legend>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s2" id="q3_1_s2_hel1" value="1"><label for="q3_1_s2_hel1">1 (Not at all)</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s2" id="q3_1_s2_hel2" value="2"><label for="q3_1_s2_hel2">2</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s2" id="q3_1_s2_hel3" value="3"><label for="q3_1_s2_hel3">3</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s2" id="q3_1_s2_hel4" value="4"><label for="q3_1_s2_hel4">4</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s2" id="q3_1_s2_hel5" value="5"><label for="q3_1_s2_hel5">5 (Very)</label></div>
+                             </fieldset>
+                         </div>
+                          <fieldset class="mb-3">
+                             <legend>4. Did any AI response seem clinically unsafe, inaccurate, or misleading?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s2" id="q4_s2_yes" value="yes" required><label for="q4_s2_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s2" id="q4_s2_no" value="no" required><label for="q4_s2_no">No</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s2" id="q4_s2_unsure" value="unsure" required><label for="q4_s2_unsure">Unsure</label></div>
+                         </fieldset>
+                          <div id="q4_1_s2_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <div class="mb-3">
+                                 <label for="q4_1_safety_details_s2" class="form-label">4.1. If Yes, please briefly explain:</label>
+                                 <textarea class="form-control" id="q4_1_safety_details_s2" name="q4_1_safety_details_s2" rows="2"></textarea>
+                             </div>
+                         </div>
+                          <div class="mb-3">
+                             <label for="q5_comments_s2" class="form-label">5. Any other comments on the AI interaction during Stage 2?</label>
+                             <textarea class="form-control" id="q5_comments_s2" name="q5_comments_s2" rows="3"></textarea>
+                         </div>
+                         <button type="button" class="btn btn-success" id="submit-stage2">Submit Evaluation for Stage 2</button>
+                     </form>
+                 </div>
+            </div>
+
+             <!-- Stage 3 (Structure is identical to Stage 1, just change IDs s1 -> s3) -->
+             <div id="stage3" class="hidden">
+                 <!-- ... Content identical to Stage 1, but with IDs ending in _s3 ... -->
+                   <h2 class="stage-heading">Stage 3</h2>
+                 <div class="case-section"><span class="case-text-label">(Case text for this stage - loaded statically)</span><div class="case-text" id="case-text-stage3"><p class="loading-text">Loading case text...</p></div></div>
+                 <div class="ai-section"><div class="chat-log" id="chat-log-stage3"></div><div class="input-group mb-3"><input type="text" id="user-query-stage3" class="form-control" placeholder="Ask the AI (requires API key)..." aria-label="User query"><button class="btn btn-primary" id="send-query-stage3">Send</button></div></div>
+                 <button class="btn btn-secondary" id="complete-stage3">Complete Stage 3 and Proceed</button>
+                 <div id="annotation-section-stage3" class="annotation-section mt-4 hidden"><h4>Evaluate AI Interaction - Stage 3</h4>
+                 <form id="stage3-annotation-form">
+                         <!-- Keep original annotation questions here -->
+                         <fieldset class="mb-3">
+                            <legend>1. How relevant were the AI's responses to your questions?</legend>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s3" id="q1_s3_rev1" value="1" required><label for="q1_s3_rev1">1 (Not at all)</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s3" id="q1_s3_rev2" value="2" required><label for="q1_s3_rev2">2</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s3" id="q1_s3_rev3" value="3" required><label for="q1_s3_rev3">3</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s3" id="q1_s3_rev4" value="4" required><label for="q1_s3_rev4">4</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s3" id="q1_s3_rev5" value="5" required><label for="q1_s3_rev5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>2. How helpful were the AI's responses in understanding the case information?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s3" id="q2_s3_hel1" value="1" required><label for="q2_s3_hel1">1 (Not at all)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s3" id="q2_s3_hel2" value="2" required><label for="q2_s3_hel2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s3" id="q2_s3_hel3" value="3" required><label for="q2_s3_hel3">3</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s3" id="q2_s3_hel4" value="4" required><label for="q2_s3_hel4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s3" id="q2_s3_hel5" value="5" required><label for="q2_s3_hel5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>3. Did the AI volunteer any information, insights, or suggestions you didn't explicitly ask for?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s3" id="q3_s3_yes" value="yes" required><label for="q3_s3_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s3" id="q3_s3_no" value="no" required><label for="q3_s3_no">No</label></div>
+                         </fieldset>
+                          <div id="q3_1_s3_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <fieldset class="mb-3">
+                                 <legend>3.1. If Yes, how helpful were these volunteered insights?</legend>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s3" id="q3_1_s3_hel1" value="1"><label for="q3_1_s3_hel1">1 (Not at all)</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s3" id="q3_1_s3_hel2" value="2"><label for="q3_1_s3_hel2">2</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s3" id="q3_1_s3_hel3" value="3"><label for="q3_1_s3_hel3">3</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s3" id="q3_1_s3_hel4" value="4"><label for="q3_1_s3_hel4">4</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s3" id="q3_1_s3_hel5" value="5"><label for="q3_1_s3_hel5">5 (Very)</label></div>
+                             </fieldset>
+                         </div>
+                          <fieldset class="mb-3">
+                             <legend>4. Did any AI response seem clinically unsafe, inaccurate, or misleading?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s3" id="q4_s3_yes" value="yes" required><label for="q4_s3_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s3" id="q4_s3_no" value="no" required><label for="q4_s3_no">No</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s3" id="q4_s3_unsure" value="unsure" required><label for="q4_s3_unsure">Unsure</label></div>
+                         </fieldset>
+                          <div id="q4_1_s3_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <div class="mb-3">
+                                 <label for="q4_1_safety_details_s3" class="form-label">4.1. If Yes, please briefly explain:</label>
+                                 <textarea class="form-control" id="q4_1_safety_details_s3" name="q4_1_safety_details_s3" rows="2"></textarea>
+                             </div>
+                         </div>
+                          <div class="mb-3">
+                             <label for="q5_comments_s3" class="form-label">5. Any other comments on the AI interaction during Stage 3?</label>
+                             <textarea class="form-control" id="q5_comments_s3" name="q5_comments_s3" rows="3"></textarea>
+                         </div>
+                         <button type="button" class="btn btn-success" id="submit-stage3">Submit Evaluation for Stage 3</button>
+                     </form>
+                 </div>
+             </div>
+
+            <!-- Stage 4 (Structure is identical to Stage 1, just change IDs s1 -> s4) -->
+            <div id="stage4" class="hidden">
+                 <!-- ... Content identical to Stage 1, but with IDs ending in _s4 ... -->
+                   <h2 class="stage-heading">Stage 4</h2>
+                 <div class="case-section"><span class="case-text-label">(Case text for this stage - loaded statically)</span><div class="case-text" id="case-text-stage4"><p class="loading-text">Loading case text...</p></div></div>
+                 <div class="ai-section"><div class="chat-log" id="chat-log-stage4"></div><div class="input-group mb-3"><input type="text" id="user-query-stage4" class="form-control" placeholder="Ask the AI (requires API key)..." aria-label="User query"><button class="btn btn-primary" id="send-query-stage4">Send</button></div></div>
+                 <button class="btn btn-secondary" id="complete-stage4">Complete Stage 4 and Proceed</button>
+                 <div id="annotation-section-stage4" class="annotation-section mt-4 hidden"><h4>Evaluate AI Interaction - Stage 4</h4>
+                 <form id="stage4-annotation-form">
+                         <!-- Keep original annotation questions here -->
+                         <fieldset class="mb-3">
+                            <legend>1. How relevant were the AI's responses to your questions?</legend>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s4" id="q1_s4_rev1" value="1" required><label for="q1_s4_rev1">1 (Not at all)</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s4" id="q1_s4_rev2" value="2" required><label for="q1_s4_rev2">2</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s4" id="q1_s4_rev3" value="3" required><label for="q1_s4_rev3">3</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s4" id="q1_s4_rev4" value="4" required><label for="q1_s4_rev4">4</label></div>
+                            <div class="form-check form-check-inline"><input type="radio" name="q1_relevance_s4" id="q1_s4_rev5" value="5" required><label for="q1_s4_rev5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>2. How helpful were the AI's responses in understanding the case information?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s4" id="q2_s4_hel1" value="1" required><label for="q2_s4_hel1">1 (Not at all)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s4" id="q2_s4_hel2" value="2" required><label for="q2_s4_hel2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s4" id="q2_s4_hel3" value="3" required><label for="q2_s4_hel3">3</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s4" id="q2_s4_hel4" value="4" required><label for="q2_s4_hel4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_helpfulness_s4" id="q2_s4_hel5" value="5" required><label for="q2_s4_hel5">5 (Very)</label></div>
+                         </fieldset>
+                         <fieldset class="mb-3">
+                             <legend>3. Did the AI volunteer any information, insights, or suggestions you didn't explicitly ask for?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s4" id="q3_s4_yes" value="yes" required><label for="q3_s4_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q3_exp_proactive_s4" id="q3_s4_no" value="no" required><label for="q3_s4_no">No</label></div>
+                         </fieldset>
+                          <div id="q3_1_s4_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <fieldset class="mb-3">
+                                 <legend>3.1. If Yes, how helpful were these volunteered insights?</legend>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s4" id="q3_1_s4_hel1" value="1"><label for="q3_1_s4_hel1">1 (Not at all)</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s4" id="q3_1_s4_hel2" value="2"><label for="q3_1_s4_hel2">2</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s4" id="q3_1_s4_hel3" value="3"><label for="q3_1_s4_hel3">3</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s4" id="q3_1_s4_hel4" value="4"><label for="q3_1_s4_hel4">4</label></div>
+                                 <div class="form-check form-check-inline"><input type="radio" name="q3_1_vol_helpful_s4" id="q3_1_s4_hel5" value="5"><label for="q3_1_s4_hel5">5 (Very)</label></div>
+                             </fieldset>
+                         </div>
+                          <fieldset class="mb-3">
+                             <legend>4. Did any AI response seem clinically unsafe, inaccurate, or misleading?</legend>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s4" id="q4_s4_yes" value="yes" required><label for="q4_s4_yes">Yes</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s4" id="q4_s4_no" value="no" required><label for="q4_s4_no">No</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_safety_s4" id="q4_s4_unsure" value="unsure" required><label for="q4_s4_unsure">Unsure</label></div>
+                         </fieldset>
+                          <div id="q4_1_s4_div" class="hidden"> <!-- Conditional field logic still applies -->
+                             <div class="mb-3">
+                                 <label for="q4_1_safety_details_s4" class="form-label">4.1. If Yes, please briefly explain:</label>
+                                 <textarea class="form-control" id="q4_1_safety_details_s4" name="q4_1_safety_details_s4" rows="2"></textarea>
+                             </div>
+                         </div>
+                          <div class="mb-3">
+                             <label for="q5_comments_s4" class="form-label">5. Any other comments on the AI interaction during Stage 4?</label>
+                             <textarea class="form-control" id="q5_comments_s4" name="q5_comments_s4" rows="3"></textarea>
+                         </div>
+                         <button type="button" class="btn btn-success" id="submit-stage4">Submit Evaluation for Stage 4</button>
+                     </form>
+                 </div>
+            </div>
+
+
+            <!-- Final Overall Evaluation Section -->
+            <div id="final-evaluation-section" class="annotation-section mt-4 hidden">
+                 <h2 class="stage-heading">Overall Evaluation</h2>
+                 <p class="alert alert-info">Please evaluate your overall experience with the AI agent based on your interactions (if any).</p>
+                <form id="final-evaluation-form">
+                    <!-- Keep original final evaluation questions here -->
+                     <fieldset class="mb-3">
+                         <legend>Overall AI Behavior</legend>
+                         <div class="mb-2">
+                             <label class="form-label">1. Based on your interaction throughout all stages, how would you describe the AI's tendency to volunteer information or insights you didn't explicitly ask for?</label>
+                             <div class="form-check form-check-inline"><input type="radio" name="q1_overall_proactivity" value="1" required><label for="oa_pro_1">1 (Very Reactive)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q1_overall_proactivity" value="2" required><label for="oa_pro_2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q1_overall_proactivity" value="3" required><label for="oa_pro_3">3 (Neutral)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q1_overall_proactivity" value="4" required><label for="oa_pro_4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q1_overall_proactivity" value="5" required><label for="oa_pro_5">5 (Very Proactive)</label></div>
+                         </div>
+                         <div class="mb-2">
+                             <label class="form-label">2. How appropriate was the level of proactivity (or reactivity) shown by this AI assistant for reviewing a case like this?</label>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_proactivity_appropriateness" value="1" required><label for="oa_appr_1">1 (Not at all appropriate)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_proactivity_appropriateness" value="2" required><label for="oa_appr_2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_proactivity_appropriateness" value="3" required><label for="oa_appr_3">3 (Neutral)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_proactivity_appropriateness" value="4" required><label for="oa_appr_4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q2_proactivity_appropriateness" value="5" required><label for="oa_appr_5">5 (Very appropriate)</label></div>
+                         </div>
+                         <div class="mb-3">
+                             <label for="q3_proactivity_comments" class="form-label">3. Please explain *why* you found the AI's proactivity/reactivity level appropriate or inappropriate. What specific types of proactive/reactive behaviors were helpful or unhelpful?</label>
+                             <textarea class="form-control" id="q3_proactivity_comments" name="q3_proactivity_comments" rows="3" required></textarea>
+                         </div>
+                     </fieldset>
+                     <fieldset class="mb-3">
+                         <legend>Overall Satisfaction</legend>
+                         <div class="mb-2">
+                             <label class="form-label">4. Overall, how satisfied were you with this AI assistant for reviewing this case?</label>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_overall_satisfaction" value="1" required><label for="oa_sat_1">1 (Very Dissatisfied)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_overall_satisfaction" value="2" required><label for="oa_sat_2">2</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_overall_satisfaction" value="3" required><label for="oa_sat_3">3 (Neutral)</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_overall_satisfaction" value="4" required><label for="oa_sat_4">4</label></div>
+                             <div class="form-check form-check-inline"><input type="radio" name="q4_overall_satisfaction" value="5" required><label for="oa_sat_5">5 (Very Satisfied)</label></div>
+                         </div>
+                         <div class="mb-3">
+                             <label for="q5_overall_comments" class="form-label">5. Any other overall comments or suggestions?</label>
+                             <textarea class="form-control" id="q5_overall_comments" name="q5_overall_comments" rows="3"></textarea>
+                         </div>
+                     </fieldset>
+                    <button type="button" class="btn btn-danger" id="submit-final-agent">Complete Evaluation (Display Data for Manual Copy)</button>
+                    <p class="text-danger small mt-2">Note: Data is NOT saved automatically. It will be displayed below for you to copy.</p>
+                </form>
+            </div>
+
+            <!-- After Final Evaluation Section but before completionMessage -->
+            <div id="transitionToNextAgentScreen" class="mt-4 hidden text-center">
+                <h2>First Agent Evaluation Complete</h2>
+                <div class="alert alert-info">
+                    <p><strong>Thank you for completing the first part of the study!</strong></p>
+                    <p>This study evaluates two different AI behavior patterns. You've just finished evaluating the first one.</p>
+                    <p>Next, you'll evaluate a second AI with a different behavior pattern using the same case.</p>
+                    <p>Your data from this first evaluation has been saved.</p>
+                </div>
+                <button class="btn btn-primary btn-lg mt-3" id="startSecondAgentButton">Continue to Second AI Agent</button>
+            </div>
+
+            <!-- Final Completion Message Area -->
+            <div id="completionMessage" class="mt-4 hidden">
+                <h3>Case Review Finished</h3>
+                <p class="alert alert-success">Thank you for completing the evaluation! Your data has been automatically downloaded as a JSON file.</p>
+                <p>If the download didn't start automatically, you can click the button below:</p>
+                <button class="btn btn-primary mt-2" onclick="downloadJSONData()">Download Data</button>
+                <div class="mt-3">
+                    <label for="finalDataDisplay" class="form-label">Data Preview (JSON):</label>
+                    <textarea id="finalDataDisplay" class="form-control" rows="6" readonly style="font-family: monospace; white-space: pre; word-wrap: break-word; background-color: #eee;"></textarea>
+                </div>
+                <button class="btn btn-info mt-3" id="selectAnotherCaseButton">Review Another Case (Reset)</button>
+            </div>
+
+        </div> <!-- End #studyContent -->
+    </div> <!-- End Container -->
+
+    <!-- JavaScript Section -->
+    <script>
+        // --- Global Variables ---
+        let currentStage = 1;
+        const totalStages = 4;
+        let sessionData = {}; // Holds data collected *locally* in the browser
+        let chatHistory = []; // Holds chat history for context (if implementing fully)
+        const agentTypes = ["reactive", "proactive"]; // The two agent behavior types
+        /* 
+         * Agent behavior types:
+         * - reactive: Only directly answers what is asked, doesn't volunteer additional information
+         * - proactive: Volunteers related information, suggests relevant questions, and offers interpretations
+         */
+        let assignedAgentType = ""; // Will be randomly assigned on startup
+        let completedAgentTypes = []; // Track which agent types have been completed
+        let currentAgentIndex = 0; // Track which agent we're currently on
+        let randomizedAgentTypes = []; // Make this global so it's accessible everywhere
+        
+        // Mapping from stage number to filename and display name (MUST MATCH FOLDER STRUCTURE)
+        const STAGE_MAPPING = {
+            1: { filename: "presentation_initial_findings.txt", display_name: "Presentation and Initial Findings" },
+            2: { filename: "diagnostic_testing.txt", display_name: "Diagnostic Testing" },
+            3: { filename: "differential_diagnosis_management.txt", display_name: "Differential Diagnosis & Initial Management" },
+            4: { filename: "further_workup_final_diagnosis.txt", display_name: "Further Workup & Final Diagnosis" }
+        };
+         // Store current case text globally within the JS scope for easy access by API calls
+         let currentCaseTextForStage = "";
+
+        // --- Utility Functions ---
+        function showElement(id) { document.getElementById(id)?.classList.remove('hidden'); }
+        function hideElement(id) { document.getElementById(id)?.classList.add('hidden'); }
+
+        function addMessageToChat(stageNum, sender, message) {
+            const chatLog = document.getElementById(`chat-log-stage${stageNum}`);
+            if (!chatLog) return;
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add(sender === 'user' ? 'user-msg' : 'ai-msg');
+
+            let formattedMessage = message // Basic text for now, could add markdown processing
+                .replace(/</g, "<") // Basic HTML escaping
+                .replace(/>/g, ">")
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italics
+                .replace(/\n/g, '<br>');                 // Newlines
+
+            // Add error styling if needed
+            if (sender === 'ai' && (message.startsWith('Error:') || message.startsWith('API Error:'))) {
+                msgDiv.style.color = '#dc3545';
+                msgDiv.style.fontWeight = 'bold';
+            } else if (sender === 'ai' && message.includes('<i>Waiting')) {
+                 msgDiv.style.fontStyle = 'italic';
+                 msgDiv.style.color = '#6c757d';
+            }
+
+            msgDiv.innerHTML = formattedMessage;
+            chatLog.appendChild(msgDiv);
+            chatLog.scrollTop = chatLog.scrollHeight;
+
+            // Add to conceptual chat history array (for potential context building)
+             if (!message.includes('<i>Waiting')) { // Don't store thinking message
+                 chatHistory.push({ role: sender === 'user' ? 'user' : 'model', parts: [{ text: message }] });
+             }
+        }
+
+        function getUserApiKey() {
+            const input = document.getElementById('userApiKeyInput');
+            return input ? input.value.trim() : null;
+        }
+
+        function getCaseId() { return document.getElementById('selectedCaseId').value; }
+        function getParticipantId() { return document.getElementById('participantId').value; }
+        function getAgentType() { return document.getElementById('conditionId').value; } // Placeholder agent
+
+        // --- Fetch Case Text for Stage (Static Version) ---
+        async function loadStageText(caseId, stageNum) {
+            const caseTextDiv = document.getElementById(`case-text-stage${stageNum}`);
+            const stageHeading = document.querySelector(`#stage${stageNum} .stage-heading`);
+            currentCaseTextForStage = ""; // Reset global case text
+
+            if (!caseTextDiv || !stageNum || !caseId || !STAGE_MAPPING[stageNum]) {
+                console.error("Missing elements or invalid stage/case for loadStageText");
+                 if(caseTextDiv) caseTextDiv.innerHTML = `<p class="error-text">Error: Invalid stage or case ID.</p>`;
+                return;
+            }
+
+            const stageInfo = STAGE_MAPPING[stageNum];
+            const filePath = `./cases/${caseId}/${stageInfo.filename}`;
+
+            caseTextDiv.innerHTML = `<p class="loading-text">Loading case text from ${filePath}...</p>`;
+            if (stageHeading) stageHeading.textContent = `Stage ${stageNum}: ${stageInfo.display_name}`;
+
+            try {
+                const response = await fetch(filePath);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status} - Could not fetch ${filePath}`);
+                }
+                let text = await response.text();
+                currentCaseTextForStage = text; // Store the raw text globally
+
+                // Basic text cleanup (can add more regex from app.py if needed)
+                 text = text.replace(/^\s*The NEW ENGLAND JOURNAL of MEDICINE\s*\n/gim, '');
+                 text = text.replace(/^\s*CASE RECORDS of the MASSACHUSETTS GENERAL HOSPITAL\s*\n/gim, '');
+                 text = text.replace(/^\s*Founded by Richard C\. Cabot\s*\n/gim, '');
+                 // Add more cleanup rules here if desired
+
+                const formattedText = text.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+                caseTextDiv.innerHTML = formattedText || `<p class="error-text">File loaded but appears empty: ${stageInfo.filename}</p>`;
+
+            } catch (error) {
+                console.error('Error fetching stage text:', error);
+                caseTextDiv.innerHTML = `<p class="error-text">Could not load case text. Ensure the file exists at '${filePath}' relative to index.html.<br>(${error.message})</p>`;
+                 currentCaseTextForStage = `Error loading case text: ${error.message}`; // Store error
+            }
+        }
+
+        // --- AI Response Function (Client-Side API Call) ---
+        async function getAIResponse(stageNum) {
+            const queryInput = document.getElementById(`user-query-stage${stageNum}`);
+            const userQuery = queryInput.value.trim();
+            const userApiKey = getUserApiKey(); // Get the key from the input
+            const sendButton = document.getElementById(`send-query-stage${stageNum}`);
+            const agentType = getAgentType(); // Get the current agent type
+
+            if (!userQuery) return;
+
+            if (!userApiKey) {
+                addMessageToChat(stageNum, 'ai', "Error: Please enter your Google AI API Key in the setup section to enable AI interaction.");
+                alert("Please enter your Google AI API Key to use the AI chat.");
+                return; // Stop if no key
+            }
+
+            addMessageToChat(stageNum, 'user', userQuery);
+            queryInput.value = '';
+            queryInput.disabled = true; // Disable during request
+            sendButton.disabled = true; // Disable during request
+
+            // --- Construct the Google Generative AI API Call ---
+            // Using gemini-1.5-flash-latest via generateContent REST API
+            // IMPORTANT: Adjust model name if necessary.
+            const API_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${userApiKey}`;
+
+            // Define the system prompt based on agent type
+            let systemPrompt = "";
+            
+            if (agentType === "reactive") {
+                systemPrompt = `You are an AI assistant helping a healthcare provider review a medical case. 
+BEHAVIOR INSTRUCTIONS: Be REACTIVE in your approach:
+- ONLY answer exactly what is asked, nothing more
+- DO NOT volunteer additional information unless explicitly requested
+- DO NOT suggest questions or further investigations
+- DO NOT offer interpretations beyond what was specifically asked for
+- Wait for explicit questions before providing information
+- Your answers should be concise and directly address only the question asked`;
+            } else if (agentType === "proactive") {
+                systemPrompt = `You are an AI assistant helping a healthcare provider review a medical case.
+BEHAVIOR INSTRUCTIONS: Be PROACTIVE in your approach:
+- Answer questions completely but also volunteer relevant related information
+- Highlight important findings that may not have been specifically asked about
+- Suggest related questions or investigations that would be helpful
+- Offer interpretations and connections between findings
+- Point out potential diagnoses or significant aspects of the case
+- Be helpful by anticipating what information might be useful`;
+            }
+
+            // --- Request Body Construction with System Prompt ---
+            // For Gemini API, include the system prompt in the user's message instead of as a separate role
+            const requestBody = {
+                "contents": [
+                    // Single user turn that includes both system instructions and the query
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "text": `${systemPrompt}\n\nCase Text for Current Stage (Stage ${stageNum}: ${STAGE_MAPPING[currentStage]?.display_name || 'N/A'}):\n${currentCaseTextForStage}\n\nUser query: ${userQuery}`
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "maxOutputTokens": 1000,
+                }
+            };
+
+            try {
+                addMessageToChat(stageNum, 'ai', '<i>Waiting for AI response...</i>');
+
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                // Remove the "Waiting" message
+                const chatLog = document.getElementById(`chat-log-stage${stageNum}`);
+                const waitingMsg = chatLog.querySelector('.ai-msg:last-child i');
+                if (waitingMsg && waitingMsg.textContent.includes('Waiting')) {
+                    waitingMsg.parentElement.remove();
+                }
+
+
+                if (!response.ok) {
+                    let errorMsg = `API Error ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = `API Error: ${errorData?.error?.message || errorMsg}`;
+                        if (response.status === 400 && errorData?.error?.message.includes('API key not valid')) {
+                            errorMsg += " Please check the API key you entered.";
+                        } else if (response.status === 429) {
+                            errorMsg += " You may have exceeded your usage quota.";
+                        }
+                    } catch (e) { /* Ignore if response body isn't JSON */ }
+                    throw new Error(errorMsg);
+                }
+
+                const data = await response.json();
+
+                // Extract the response text (handle potential variations)
+                let aiResponseText = "Error: Could not parse AI response.";
+                if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    aiResponseText = data.candidates[0].content.parts[0].text;
+                    
+                    // For proactive responses, give a visual indicator
+                    if (agentType === "proactive") {
+                        const responseElement = document.createElement('div');
+                        responseElement.classList.add('ai-msg');
+                        responseElement.classList.add('proactive-highlight');
+                        responseElement.innerHTML = aiResponseText
+                            .replace(/</g, "<") // Basic HTML escaping
+                            .replace(/>/g, ">")
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                            .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italics
+                            .replace(/\n/g, '<br>');                 // Newlines
+                        
+                        chatLog.appendChild(responseElement);
+                        chatLog.scrollTop = chatLog.scrollHeight;
+                        
+                        chatHistory.push({ role: 'model', parts: [{ text: aiResponseText }] });
+                        
+                        // We manually added the message, so skip the regular addMessageToChat below
+                        aiResponseText = null;
+                    }
+                } else if (data?.promptFeedback?.blockReason) {
+                    // Handle blocked responses due to safety settings
+                    aiResponseText = `Error: Response blocked due to safety settings (Reason: ${data.promptFeedback.blockReason}).`;
+                }
+
+                // Only call addMessageToChat if we didn't already add the message for proactive
+                if (aiResponseText) {
+                    addMessageToChat(stageNum, 'ai', aiResponseText);
+                }
+
+            } catch (error) {
+                console.error('Error calling Google AI API:', error);
+                    // Remove waiting message if it's still there on error
+                    const chatLog = document.getElementById(`chat-log-stage${stageNum}`);
+                    const waitingMsg = chatLog?.querySelector('.ai-msg:last-child i');
+                    if (waitingMsg && waitingMsg.textContent.includes('Waiting')) {
+                        waitingMsg.parentElement.remove();
+                    }
+                addMessageToChat(stageNum, 'ai', `Error: ${error.message}.`);
+            } finally {
+                    queryInput.disabled = false; // Re-enable input
+                    sendButton.disabled = false; // Re-enable button
+                    queryInput.focus();
+            }
+        }
+
+
+        // --- Form & Stage Logic ---
+        function collectFormData(formId) {
+            const form = document.getElementById(formId);
+            if(!form) return {};
+            const formData = new FormData(form);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                // Check if the value for a radio group is already set by a checked radio
+                const existingValue = data[key];
+                 if (form.querySelector(`input[name="${key}"][type="radio"]`)) {
+                     // If it's a radio button, only set if checked, otherwise rely on the final loop
+                     const radio = form.querySelector(`input[name="${key}"][value="${value}"]`);
+                     if (radio && radio.checked) {
+                         data[key] = value;
+                     }
+                 } else {
+                    data[key] = value;
+                 }
+            }
+             // Ensure all radio groups have a value (even if null)
+             form.querySelectorAll('input[type="radio"]').forEach(radio => {
+                 const groupName = radio.name;
+                 if (!data.hasOwnProperty(groupName)) {
+                     data[groupName] = null; // Set to null if no radio in the group was checked
+                 }
+             });
+            return data;
+        }
+
+         function validateForm(formId) {
+            const form = document.getElementById(formId);
+            if (!form) return true; // No form to validate
+            let isValid = true;
+            const requiredElements = form.querySelectorAll('[required]');
+
+            for (const input of requiredElements) {
+                let fieldValid = true;
+                if (input.type === 'radio') {
+                    const groupName = input.name;
+                    if (!form.querySelector(`input[name="${groupName}"]:checked`)) {
+                        fieldValid = false;
+                        // Mark the fieldset containing the radio group
+                         const fieldset = input.closest('fieldset');
+                         if (fieldset && !fieldset.hasAttribute('data-error-marked')) {
+                             fieldset.style.border = '2px solid red';
+                             fieldset.setAttribute('data-error-marked', 'true'); // Prevent multiple highlights
+                             setTimeout(() => {
+                                 fieldset.style.border = '';
+                                 fieldset.removeAttribute('data-error-marked');
+                             }, 3000);
+                         }
+                    }
+                } else if (input.type === 'textarea' || input.type === 'text' || input.type === 'password') {
+                    if (input.value.trim() === '') {
+                        fieldValid = false;
+                         input.style.border = '2px solid red';
+                         setTimeout(() => { input.style.border = ''; }, 3000);
+                    }
+                }
+                // Add other input types if necessary
+
+                if (!fieldValid && isValid) { // Only alert and scroll once
+                     isValid = false;
+                     alert(`Please answer all required questions/fields.`);
+                     input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+            return isValid;
+         }
+
+        // Sets up event listeners and conditional logic for a specific stage's annotation form
+        function setupAnnotationFormLogic(stageNum) {
+                // ADD Log Lines Here:
+                console.log(`DEBUG: Running setupAnnotationFormLogic for stage ${stageNum}`);
+                const q3Radios = document.querySelectorAll(`input[name="q3_exp_proactive_s${stageNum}"]`);
+                console.log(`DEBUG: Found ${q3Radios.length} q3Radios for stage ${stageNum}`);
+                const q3_1Div = document.getElementById(`q3_1_s${stageNum}_div`);
+                console.log(`DEBUG: Found q3_1Div for stage ${stageNum}:`, q3_1Div); // Check if null
+                const q4Radios = document.querySelectorAll(`input[name="q4_safety_s${stageNum}"]`);
+                console.log(`DEBUG: Found ${q4Radios.length} q4Radios for stage ${stageNum}`);
+                const q4_1Div = document.getElementById(`q4_1_s${stageNum}_div`);
+                console.log(`DEBUG: Found q4_1Div for stage ${stageNum}:`, q4_1Div); // Check if null
+
+
+             q3Radios.forEach(radio => {
+                 radio?.addEventListener('change', function() {
+                     const q3_1Radios = q3_1Div?.querySelectorAll('input[type="radio"]');
+                     const q3_1Legend = q3_1Div?.querySelector('legend');
+                     if (this.value === 'yes') {
+                         showElement(q3_1Div?.id);
+                         q3_1Radios?.forEach(r => r.required = true);
+                          if(q3_1Legend) q3_1Legend.classList.add('text-danger'); // Indicate required
+                     } else {
+                         hideElement(q3_1Div?.id);
+                         q3_1Radios?.forEach(r => { r.required = false; r.checked = false; });
+                          if(q3_1Legend) q3_1Legend.classList.remove('text-danger');
+                     }
+                 });
+             });
+             // Trigger initial state for Q3
+             const initialQ3 = document.querySelector(`input[name="q3_exp_proactive_s${stageNum}"]:checked`);
+             if (initialQ3) initialQ3.dispatchEvent(new Event('change'));
+             else { hideElement(q3_1Div?.id); q3_1Div?.querySelectorAll('input[type="radio"]').forEach(r => r.required = false); }
+
+
+             q4Radios.forEach(radio => {
+                 radio?.addEventListener('change', function() {
+                     const q4_1Textarea = q4_1Div?.querySelector('textarea');
+                     const q4_1Label = q4_1Div?.querySelector('label');
+                     if (this.value === 'yes') {
+                         showElement(q4_1Div?.id);
+                         if(q4_1Textarea) q4_1Textarea.required = true;
+                          if(q4_1Label) q4_1Label.classList.add('text-danger'); // Indicate required
+                     } else {
+                         hideElement(q4_1Div?.id);
+                         if(q4_1Textarea) { q4_1Textarea.required = false; q4_1Textarea.value = ''; }
+                          if(q4_1Label) q4_1Label.classList.remove('text-danger');
+                     }
+                 });
+             });
+             // Trigger initial state for Q4
+              const initialQ4 = document.querySelector(`input[name="q4_safety_s${stageNum}"]:checked`);
+              if (initialQ4) initialQ4.dispatchEvent(new Event('change'));
+         }
+
+
+        function setupStage(stageNum) {
+            const sendButton = document.getElementById(`send-query-stage${stageNum}`);
+            const queryInput = document.getElementById(`user-query-stage${stageNum}`);
+            const completeButton = document.getElementById(`complete-stage${stageNum}`);
+            const submitButton = document.getElementById(`submit-stage${stageNum}`);
+            const chatLog = document.getElementById(`chat-log-stage${stageNum}`);
+
+             // Clear chat log for the stage being set up
+             if(chatLog) chatLog.innerHTML = '';
+             // Reset chat history when setting up stage 1 of a new session/agent
+             if(stageNum === 1) chatHistory = [];
+
+            // Enable AI chat elements
+            if (sendButton) {
+                 sendButton.disabled = false; // Enable send button
+                 // Remove previous listener if any, then add new one
+                 sendButton.replaceWith(sendButton.cloneNode(true)); // Simple way to remove listeners
+                 document.getElementById(`send-query-stage${stageNum}`).addEventListener('click', () => getAIResponse(stageNum));
+            }
+            if (queryInput) {
+                queryInput.disabled = false; // Enable input
+                queryInput.placeholder = "Ask the AI (requires API key above)...";
+                 // Remove previous listener if any, then add new one
+                 queryInput.replaceWith(queryInput.cloneNode(true)); // Simple way to remove listeners
+                 document.getElementById(`user-query-stage${stageNum}`).addEventListener('keypress', (e) => { 
+                    if (e.key === 'Enter' && !e.shiftKey) { 
+                        e.preventDefault(); 
+                        getAIResponse(stageNum); 
+                    } 
+                });
+            }
+
+            // Event listener for completing the stage (showing annotations)
+            if (completeButton) {
+                 completeButton.replaceWith(completeButton.cloneNode(true));
+                 // Inside setupStage(stageNum)... find the completeButton listener
+
+                 document.getElementById(`complete-stage${stageNum}`).addEventListener('click', () => {
+                    console.log(`DEBUG: Click handler for complete-stage${stageNum} fired!`); // This ran for stage 2
+
+                    // Potential Issue Point 1: Disabling inputs (less likely to stop progress)
+                    const queryInput = document.getElementById(`user-query-stage${stageNum}`);
+                    const sendButton = document.getElementById(`send-query-stage${stageNum}`);
+                    if (queryInput) queryInput.disabled = true;
+                    if (sendButton) sendButton.disabled = true;
+
+                    // Potential Issue Point 2: Showing the annotation section DIV
+                    showElement(`annotation-section-stage${stageNum}`);
+
+                    // Potential Issue Point 3: Setting up conditional logic inside the form
+                    setupAnnotationFormLogic(stageNum);
+
+                    // Potential Issue Point 4: Scrolling
+                    document.getElementById(`annotation-section-stage${stageNum}`)?.scrollIntoView({ behavior: 'smooth' });
+                });
+            }
+
+             // Event listener for submitting stage annotations (local save only)
+            if (submitButton) {
+                 submitButton.replaceWith(submitButton.cloneNode(true));
+                 document.getElementById(`submit-stage${stageNum}`).addEventListener('click', () => {
+                    const formId = `stage${stageNum}-annotation-form`;
+                     if (!validateForm(formId)) return; // Basic validation
+
+                     // Store data locally in the browser sessionData object
+                     const agentType = getAgentType(); // Placeholder agent
+                     if (!sessionData[agentType]) sessionData[agentType] = { stages: {} }; // Init if needed
+                     if (!sessionData[agentType].stages) sessionData[agentType].stages = {};
+                     sessionData[agentType].stages[`stage${stageNum}`] = collectFormData(formId);
+
+                     console.log(`Stage ${stageNum} Data (Stored Locally):`, sessionData[agentType].stages[`stage${stageNum}`]);
+                     // alert(`Stage ${stageNum} annotations recorded locally (not saved to server).`);
+
+
+                    hideElement(`stage${stageNum}`);
+                    currentStage++;
+                    if (currentStage <= totalStages) {
+                        showElement(`stage${currentStage}`);
+                        loadStageText(getCaseId(), currentStage); // Load next stage's static text
+                        document.getElementById(`stage${currentStage}`).scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                        // All stages complete, show final evaluation
+                        showElement('final-evaluation-section');
+                         // Setup conditional logic for final form if needed (none currently)
+                        document.getElementById('final-evaluation-section').scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
+            }
+        }
+
+        // --- Function to "Save" Final Session Data (Local Display Only) ---
+        async function saveSessionData() {
+            // Add metadata
+            sessionData['participantId'] = getParticipantId();
+            sessionData['caseId'] = getCaseId();
+            sessionData['agentType'] = getAgentType(); // The current agent type (reactive/proactive)
+            sessionData['timestamp'] = new Date().toISOString();
+            sessionData['evaluatedAgentTypes'] = completedAgentTypes; // List of all evaluated agent types
+            sessionData['agentTypeOrder'] = randomizedAgentTypes; // The order they were evaluated in
+            
+            // Store agent type information to make the data clearer
+            if (getAgentType() === "reactive") {
+                sessionData['agentTypeDescription'] = "Reactive - Only answers what is directly asked";
+            } else if (getAgentType() === "proactive") {
+                sessionData['agentTypeDescription'] = "Proactive - Volunteers additional information and insights";
+            }
+            
+            // Create the JSON string
+            const finalDataString = JSON.stringify(sessionData, null, 2);
+            console.log("Final Session Data:", finalDataString);
+
+            // Display the data preview
+            const displayArea = document.getElementById('finalDataDisplay');
+            if(displayArea) {
+                displayArea.value = finalDataString; // Use value for textarea
+            }
+            
+            // Trigger download automatically
+            downloadJSONData();
+            
+            return true; // Indicate completion
+        }
+
+        // --- Function to Download JSON Data ---
+        function downloadJSONData() {
+            // Create the JSON data
+            const jsonData = JSON.stringify(sessionData, null, 2);
+            
+            // Create a blob and generate a download link
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            // Create filename with metadata including all completed agent types
+            const agentTypeString = completedAgentTypes.join('-and-');
+            const filename = `${getParticipantId()}_${getCaseId()}_${agentTypeString}_${Date.now()}.json`;
+            
+            // Create a temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            
+            // Clean up
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+                document.body.removeChild(link);
+            }, 100);
+        }
+
+         // --- Function to Copy Final Data (kept as backup) ---
+         function copyFinalData() {
+             const displayArea = document.getElementById('finalDataDisplay');
+             const copyStatus = document.getElementById('copyStatus');
+             if (!displayArea) return;
+             try {
+                displayArea.select(); // Select the text
+                 document.execCommand('copy'); // Copy to clipboard (may not work in all browsers/contexts)
+                 // Modern alternative (preferred):
+                 // await navigator.clipboard.writeText(displayArea.value);
+                 if (copyStatus) copyStatus.textContent = 'Data copied to clipboard!';
+                 setTimeout(() => { if (copyStatus) copyStatus.textContent = ''; }, 3000);
+             } catch (err) {
+                 console.error('Failed to copy text: ', err);
+                 if (copyStatus) copyStatus.textContent = 'Failed to copy automatically. Please select and copy manually.';
+             }
+             // Deselect
+             window.getSelection()?.removeAllRanges();
+         }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            showElement('initialSetupScreen');
+            hideElement('studyContent');
+            hideElement('transitionToNextAgentScreen'); // Hide transition screen initially
+
+            // Randomize both agent types order
+            randomizedAgentTypes = [...agentTypes]; // Use the global variable now
+            shuffleArray(randomizedAgentTypes);
+            console.log(`Randomized agent order: ${randomizedAgentTypes.join(', ')}`);
+            
+            // Set initial agent type
+            assignedAgentType = randomizedAgentTypes[0];
+            document.getElementById('conditionId').value = assignedAgentType;
+            console.log(`Starting with agent type: ${assignedAgentType}`);
+
+            // Helper function to shuffle array
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+            
+            // Add event listener for the transition screen button
+            document.getElementById('startSecondAgentButton').addEventListener('click', () => {
+                // Go to next agent type
+                currentAgentIndex++;
+                
+                if (currentAgentIndex < randomizedAgentTypes.length) {
+                    // Get the next agent type
+                    assignedAgentType = randomizedAgentTypes[currentAgentIndex];
+                    document.getElementById('conditionId').value = assignedAgentType;
+                    console.log(`Switching to agent type: ${assignedAgentType}`);
+                    
+                    // Reset for next agent evaluation
+                    currentStage = 1;
+                    chatHistory = [];
+                    
+                    // Hide transition screen and show stage 1 again
+                    hideElement('transitionToNextAgentScreen');
+                    showElement('studyContent');
+                    
+                    // Hide all stages initially
+                    for (let i = 1; i <= totalStages; i++) {
+                        hideElement(`stage${i}`);
+                        hideElement(`annotation-section-stage${i}`);
+                        
+                        // Reset forms within stages
+                        const form = document.getElementById(`stage${i}-annotation-form`);
+                        if (form) form.reset();
+                    }
+                    
+                    // Reset final form
+                    const finalForm = document.getElementById('final-evaluation-form');
+                    if(finalForm) finalForm.reset();
+                    
+                    hideElement('final-evaluation-section');
+                    
+                    // Keep the API key from before - don't reset it
+                    // const apiKeyInput = document.getElementById('userApiKeyInput');
+                    // apiKeyInput.value is preserved from the first agent evaluation
+                    
+                    // Show stage 1 again
+                    showElement('stage1');
+                    loadStageText(getCaseId(), 1);
+                    
+                    // Setup listeners for all stage elements again to ensure chat works
+                    for(let i = 1; i <= totalStages; i++) { setupStage(i); }
+                    
+                    document.getElementById('stage1').scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+
+            const startButton = document.getElementById('startStudyButton');
+            const caseSelect = document.getElementById('caseSelect');
+            const participantIdInput = document.getElementById('participantIdInput');
+            const apiKeyInput = document.getElementById('userApiKeyInput');
+
+
+             // Enable start button logic
+             function checkEnableStart() {
+                 startButton.disabled = caseSelect.value === "" || participantIdInput.value.trim() === "" || apiKeyInput.value.trim() === "";
+             }
+             caseSelect.addEventListener('change', checkEnableStart);
+             participantIdInput.addEventListener('input', checkEnableStart);
+             apiKeyInput.addEventListener('input', checkEnableStart);
+             checkEnableStart(); // Initial check
+
+            startButton.addEventListener('click', async () => {
+                const selectedCaseId = caseSelect.value;
+                const participantId = participantIdInput.value.trim();
+                const userApiKey = apiKeyInput.value.trim(); // Get key at start
+
+                 // Extra validation on start
+                 if (!selectedCaseId || !participantId || !userApiKey) {
+                     alert("Please enter Participant ID, select a case, AND provide your Google AI API Key.");
+                     return;
+                 }
+
+                document.getElementById('selectedCaseId').value = selectedCaseId;
+                document.getElementById('participantId').value = participantId;
+                // No need to set conditionId, already set randomly on page load
+
+                sessionData = {}; // Reset local session data
+                currentStage = 1; // Reset stage
+
+                hideElement('initialSetupScreen');
+                showElement('studyContent');
+                hideElement('final-evaluation-section');
+                hideElement('completionMessage');
+                // Hide all stages initially
+                for (let i = 1; i <= totalStages; i++) {
+                     hideElement(`stage${i}`);
+                     hideElement(`annotation-section-stage${i}`);
+                     // Reset forms within stages
+                     const form = document.getElementById(`stage${i}-annotation-form`);
+                     if (form) form.reset();
+                 }
+                 // Reset final form
+                 const finalForm = document.getElementById('final-evaluation-form');
+                 if(finalForm) finalForm.reset();
+
+
+                // Setup listeners for all stage elements once
+                for(let i = 1; i <= totalStages; i++) { setupStage(i); }
+
+                // Start Stage 1
+                showElement('stage1');
+                loadStageText(selectedCaseId, 1); // Load first stage text statically
+                document.getElementById('stage1').scrollIntoView({ behavior: 'smooth' });
+
+            });
+
+
+            // --- Listener for Final Evaluation Submit Button ---
+            const submitFinalAgentButton = document.getElementById('submit-final-agent');
+            if (submitFinalAgentButton) {
+                submitFinalAgentButton.addEventListener('click', async function() {
+                    const formId = 'final-evaluation-form';
+                     if (!validateForm(formId)) return;
+
+                    // Collect final evaluation data locally
+                     const agentType = getAgentType();
+                     if (!sessionData[agentType]) sessionData[agentType] = {};
+                     sessionData[agentType].final = collectFormData(formId);
+                     console.log(`Final Evaluation Data (Stored Locally):`, sessionData[agentType].final);
+
+                    // Track completed agent type
+                    completedAgentTypes.push(agentType);
+
+                    hideElement('final-evaluation-section');
+                    
+                    // Check if we've completed all agent types
+                    if (completedAgentTypes.length < agentTypes.length && currentAgentIndex < randomizedAgentTypes.length - 1) {
+                        // Show transition screen to next agent
+                        showElement('transitionToNextAgentScreen');
+                        document.getElementById('transitionToNextAgentScreen').scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                        // All agent types completed, save the final data
+                        const savedLocally = await saveSessionData();
+                        
+                        if (savedLocally) {
+                            showElement('completionMessage');
+                            document.getElementById('completionMessage').scrollIntoView({ behavior: 'smooth' });
+                            // Disable most elements except the reset button and download button
+                            document.querySelectorAll('button, input, select, textarea').forEach(el => {
+                                if (el.id !== 'selectAnotherCaseButton' && el.tagName.toLowerCase() !== 'textarea' /* allow copying */ && el.textContent !== 'Download Data') {
+                                    el.disabled = true;
+                                }
+                            });
+                            document.getElementById('finalDataDisplay').readOnly = true; // Ensure textarea is readonly
+                            document.getElementById('selectAnotherCaseButton').disabled = false; // Ensure reset button is enabled
+                        } else {
+                            alert("An error occurred during final data collection/display.");
+                        }
+                    }
+                });
+            }
+
+            // --- Listener for "Select Another Case" button ---
+            const selectAnotherCaseButton = document.getElementById('selectAnotherCaseButton');
+            if (selectAnotherCaseButton) {
+                selectAnotherCaseButton.addEventListener('click', () => {
+                    // Reset UI to initial state
+                    hideElement('studyContent');
+                    hideElement('completionMessage');
+                    hideElement('transitionToNextAgentScreen');
+                    hideElement('final-evaluation-section');
+                    document.getElementById('finalDataDisplay').value = ''; // Clear displayed data
+                    
+                    // Reset global tracking variables
+                    currentAgentIndex = 0;
+                    completedAgentTypes = [];
+                    sessionData = {};
+                    currentStage = 1;
+                    chatHistory = [];
+                    
+                    // Re-randomize agent types for a new session
+                    shuffleArray(randomizedAgentTypes);
+                    assignedAgentType = randomizedAgentTypes[0];
+                    document.getElementById('conditionId').value = assignedAgentType;
+                    console.log(`New randomized order: ${randomizedAgentTypes.join(', ')}`);
+                    console.log(`Starting with new agent type: ${assignedAgentType}`);
+                    
+                    // Re-enable setup inputs and reset them
+                    participantIdInput.value = '';
+                    caseSelect.value = ''; // Reset case selection
+                    apiKeyInput.value = ''; // Clear API key field
+                    
+                    // Re-enable all potentially disabled elements
+                    document.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = false);
+                    // Reset readonly state for data display (though it's hidden)
+                    document.getElementById('finalDataDisplay').readOnly = false;
+                    
+                    // Reset all chat logs
+                    for (let i = 1; i <= totalStages; i++) {
+                        const chatLog = document.getElementById(`chat-log-stage${i}`);
+                        if (chatLog) chatLog.innerHTML = '';
+                    }
+                    
+                    checkEnableStart(); // Check button state (will be disabled)
+                    showElement('initialSetupScreen');
+                    document.getElementById('initialSetupScreen').scrollIntoView();
+                });
+            }
+
+             // Initialize conditional logic for all stage forms (will be hidden initially)
+             // but ensures the logic is attached for when they become visible.
+             for (let i = 1; i <= totalStages; i++) {
+                 setupAnnotationFormLogic(i);
+             }
+        });
+    </script>
+
+</body>
+</html>
